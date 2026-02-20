@@ -1,6 +1,45 @@
 package rl
 
 /*
+#cgo nocallback DrawFPS
+#cgo nocallback DrawText
+#cgo nocallback DrawTextCodepoint
+#cgo nocallback DrawTextCodepoints
+#cgo nocallback DrawTextEx
+#cgo nocallback DrawTextPro
+#cgo nocallback GenImageFontAtlas
+#cgo nocallback GetFontDefault
+#cgo nocallback GetGlyphAtlasRec
+#cgo nocallback GetGlyphIndex
+#cgo nocallback GetGlyphInfo
+#cgo nocallback IsFontValid
+#cgo nocallback MeasureText
+#cgo nocallback MeasureTextEx
+#cgo nocallback SetTextLineSpacing
+
+#cgo noescape DrawFPS
+#cgo noescape DrawText
+#cgo noescape DrawTextCodepoint
+#cgo noescape DrawTextCodepoints
+#cgo noescape DrawTextEx
+#cgo noescape DrawTextPro
+#cgo noescape GenImageFontAtlas
+#cgo noescape GetFontDefault
+#cgo noescape GetGlyphAtlasRec
+#cgo noescape GetGlyphIndex
+#cgo noescape GetGlyphInfo
+#cgo noescape IsFontValid
+#cgo noescape LoadFont
+#cgo noescape LoadFontData
+#cgo noescape LoadFontEx
+#cgo noescape LoadFontFromImage
+#cgo noescape LoadFontFromMemory
+#cgo noescape MeasureText
+#cgo noescape MeasureTextEx
+#cgo noescape SetTextLineSpacing
+#cgo noescape UnloadFont
+#cgo noescape UnloadFontData
+
 #include "raylib.h"
 #include <stdlib.h>
 */
@@ -8,9 +47,10 @@ import "C"
 import (
 	"unsafe"
 
-	"github.com/igadmg/gamemath/rect2"
-	"github.com/igadmg/gamemath/vector2"
-	"github.com/igadmg/goex/image/colorex"
+	"github.com/Mishka-Squat/gamemath/rect2"
+	"github.com/Mishka-Squat/gamemath/vector2"
+	"github.com/Mishka-Squat/goex/image/colorex"
+	"github.com/Mishka-Squat/goex/mathex"
 )
 
 var defaultFont Font
@@ -93,8 +133,9 @@ func LoadFontData(fileData []byte, fontSize int32, codePoints []rune, codepointC
 	}
 	ccodePointCount := (C.int)(codepointCount)
 	ctype := (C.int)(typ)
-	ret := C.LoadFontData(cfileData, cdataSize, cfontSize, ccodePoints, ccodePointCount, ctype)
-	v := unsafe.Slice((*GlyphInfo)(unsafe.Pointer(ret)), ccodePointCount)
+	cglyphCount := (C.int)(codepointCount)
+	ret := C.LoadFontData(cfileData, cdataSize, cfontSize, ccodePoints, ccodePointCount, ctype, &cglyphCount)
+	v := unsafe.Slice((*GlyphInfo)(unsafe.Pointer(ret)), cglyphCount)
 	return v
 }
 
@@ -111,14 +152,14 @@ func UnloadFont(font *Font) {
 }
 
 // DrawFPS - Shows current FPS
-func DrawFPS[XT, YT CoordinateT](posX XT, posY YT) {
+func DrawFPS[XT, YT mathex.Number](posX XT, posY YT) {
 	cposX := (C.int)(posX)
 	cposY := (C.int)(posY)
 	C.DrawFPS(cposX, cposY)
 }
 
 // DrawText - Draw text (using default font)
-func DrawText[XT, YT CoordinateT](text string, posX XT, posY YT, fontSize int32, col colorex.RGBA) {
+func DrawText[XT, YT mathex.Number](text string, posX XT, posY YT, fontSize int32, col colorex.RGBA) {
 	ctext := textAlloc(text)
 	cposX := (C.int)(posX)
 	cposY := (C.int)(posY)

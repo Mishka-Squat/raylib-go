@@ -14,11 +14,12 @@ import (
 	"strings"
 	"unsafe"
 
-	"github.com/igadmg/gamemath/rect2"
-	"github.com/igadmg/gamemath/vector2"
-	"github.com/igadmg/gamemath/vector3"
-	"github.com/igadmg/goex/image/colorex"
-	rl "github.com/igadmg/raylib-go/raylib"
+	"github.com/Mishka-Squat/gamemath/rect2"
+	"github.com/Mishka-Squat/gamemath/vector2"
+	"github.com/Mishka-Squat/gamemath/vector3"
+	"github.com/Mishka-Squat/goex/image/colorex"
+	rl "github.com/Mishka-Squat/raylib-go/raylib"
+	"golang.org/x/exp/constraints"
 )
 
 type BoundsFn func(bounds rect2.Float32)
@@ -28,234 +29,205 @@ const (
 	SCROLLBAR_RIGHT_SIDE
 )
 
-// GuiStyleProp - Style property
-type GuiStyleProp struct {
+// StyleProp - Style property
+type StyleProp struct {
 	controlId     uint16
 	propertyId    uint16
 	propertyValue uint32
 }
 
-// GuiState .
-type GuiState int32
+// State .
+type State int8
 
 const (
-	STATE_NORMAL GuiState = iota
+	STATE_NORMAL State = iota
 	STATE_FOCUSED
 	STATE_PRESSED
 	STATE_DISABLED
+
+	STATE_MAX
 )
 
-// GuiTextAlignment .
-type GuiTextAlignment = int32
+func (s State) ColorProperty(base ControlProperty) ControlProperty {
+	return base + ControlProperty(s*PropertyControlColorStride)
+}
+
+// TextAlignment .
+type TextAlignment = int8
 
 // Gui control text alignment
 const (
-	TEXT_ALIGN_LEFT GuiTextAlignment = iota
+	TEXT_ALIGN_LEFT TextAlignment = iota
 	TEXT_ALIGN_CENTER
 	TEXT_ALIGN_RIGHT
 )
 
-// GuiTextAlignmentVertical .
-type GuiTextAlignmentVertical = int32
+// TextAlignmentVertical .
+type TextAlignmentVertical = int8
 
 // Gui control text alignment vertical
 const (
-	TEXT_ALIGN_TOP GuiTextAlignmentVertical = iota
+	TEXT_ALIGN_TOP TextAlignmentVertical = iota
 	TEXT_ALIGN_MIDDLE
 	TEXT_ALIGN_BOTTOM
 )
 
-// GuiTextWrapMode .
-type GuiTextWrapMode = int32
+// TextWrapMode .
+type TextWrapMode = int8
 
 // Gui control text wrap mode
 // NOTE: Useful for multiline text
 const (
-	TEXT_WRAP_NONE GuiTextWrapMode = iota
+	TEXT_WRAP_NONE TextWrapMode = iota
 	TEXT_WRAP_CHAR
 	TEXT_WRAP_WORD
 )
 
-// GuiControl .
-type GuiControl = int32
+// Control .
+type Control = int8
 
 // DEFAULT - Gui controls
 const (
-	DEFAULT GuiControl = iota
-	LABEL
-	BUTTON
-	TOGGLE
-	SLIDER
-	PROGRESSBAR
-	CHECKBOX
-	COMBOBOX
-	DROPDOWNBOX
-	TEXTBOX
-	VALUEBOX
-	SPINNER
-	LISTVIEW
-	COLORPICKER
-	SCROLLBAR
-	STATUSBAR
+	Control_DEFAULT Control = iota
+	Control_LABEL
+	Control_BUTTON
+	Control_TOGGLE
+	Control_SLIDER
+	Control_PROGRESSBAR
+	Control_CHECKBOX
+	Control_COMBOBOX
+	Control_DROPDOWNBOX
+	Control_TEXTBOX
+	Control_VALUEBOX
+	Control_SPINNER
+	Control_LISTVIEW
+	Control_COLORPICKER
+	Control_SCROLLBAR
+	Control_STATUSBAR
 )
 
-// GuiControlProperty .
-type GuiControlProperty = int32
+// ControlProperty .
+type ControlProperty = int8
 
 // Gui base properties for every control
 // NOTE: RAYGUI_MAX_PROPS_BASE properties (by default 16 properties)
 const (
-	BORDER_COLOR_NORMAL GuiControlProperty = iota
-	BASE_COLOR_NORMAL
-	TEXT_COLOR_NORMAL
-	BORDER_COLOR_FOCUSED
-	BASE_COLOR_FOCUSED
-	TEXT_COLOR_FOCUSED
-	BORDER_COLOR_PRESSED
-	BASE_COLOR_PRESSED
-	TEXT_COLOR_PRESSED
-	BORDER_COLOR_DISABLED
-	BASE_COLOR_DISABLED
-	TEXT_COLOR_DISABLED
-	BORDER_WIDTH
-	TEXT_PADDING
-	TEXT_ALIGNMENT
+	ControlProperty_BORDER_COLOR_NORMAL ControlProperty = iota
+	ControlProperty_BASE_COLOR_NORMAL
+	ControlProperty_TEXT_COLOR_NORMAL
+	ControlProperty_BORDER_COLOR_FOCUSED
+	ControlProperty_BASE_COLOR_FOCUSED
+	ControlProperty_TEXT_COLOR_FOCUSED
+	ControlProperty_BORDER_COLOR_PRESSED
+	ControlProperty_BASE_COLOR_PRESSED
+	ControlProperty_TEXT_COLOR_PRESSED
+	ControlProperty_BORDER_COLOR_DISABLED
+	ControlProperty_BASE_COLOR_DISABLED
+	ControlProperty_TEXT_COLOR_DISABLED
+	ControlProperty_BORDER_WIDTH
+	ControlProperty_TEXT_PADDING
+	ControlProperty_TEXT_ALIGNMENT
 )
 
-// GuiDefaultProperty .
-type GuiDefaultProperty = int32
+const PropertyControlColorStride = 3 // BORDER, BASE, TEXT
 
 // DEFAULT extended properties
 // NOTE: Those properties are common to all controls or global
 const (
-	TEXT_SIZE GuiDefaultProperty = iota + 16
-	TEXT_SPACING
-	LINE_COLOR
-	BACKGROUND_COLOR
-	TEXT_LINE_SPACING
-	TEXT_ALIGNMENT_VERTICAL
-	TEXT_WRAP_MODE
+	DefaultProperty_TEXT_SIZE ControlProperty = iota + 16
+	DefaultProperty_TEXT_SPACING
+	DefaultProperty_LINE_COLOR
+	DefaultProperty_BACKGROUND_COLOR
+	DefaultProperty_TEXT_LINE_SPACING
+	DefaultProperty_TEXT_ALIGNMENT_VERTICAL
+	DefaultProperty_TEXT_WRAP_MODE
 )
 
-// GROUP_PADDING .
 const (
-	GROUP_PADDING int32 = 16
+	ToggleProperty_GROUP_PADDING ControlProperty = 16
 )
-
-// GuiToggleProperty .
-type GuiToggleProperty = int32
 
 const (
 	// Slider size of internal bar
-	SLIDER_WIDTH int32 = 16
+	SliderProperty_SLIDER_WIDTH ControlProperty = 16
 	// Slider/SliderBar internal bar padding
-	SLIDER_PADDING = 17
+	SliderProperty_SLIDER_PADDING = 17
 )
-
-// GuiSliderProperty .
-type GuiSliderProperty = int32
 
 const (
 	// ProgressBar internal padding
-	PROGRESS_PADDING int32 = 16
+	ProgressBarProperty_PROGRESS_PADDING ControlProperty = 16
 )
-
-// GuiProgressBarProperty .
-type GuiProgressBarProperty = int32
 
 const (
-	ARROWS_SIZE int32 = iota + 16
-	ARROWS_VISIBLE
-	SCROLL_SLIDER_PADDING
-	SCROLL_SLIDER_SIZE
-	SCROLL_PADDING
-	SCROLL_SPEED
+	ScrollBarProperty_ARROWS_SIZE ControlProperty = iota + 16
+	ScrollBarProperty_ARROWS_VISIBLE
+	ScrollBarProperty_SCROLL_SLIDER_PADDING
+	ScrollBarProperty_SCROLL_SLIDER_SIZE
+	ScrollBarProperty_SCROLL_PADDING
+	ScrollBarProperty_SCROLL_SPEED
 )
-
-// GuiScrollBarProperty .
-type GuiScrollBarProperty = int32
 
 const (
-	CHECK_PADDING int32 = 16
+	CheckBoxProperty_CHECK_PADDING ControlProperty = 16
 )
-
-// GuiCheckBoxProperty .
-type GuiCheckBoxProperty = int32
 
 const (
 	// ComboBox right button width
-	COMBO_BUTTON_WIDTH int32 = 16
+	ComboBoxProperty_COMBO_BUTTON_WIDTH ControlProperty = 16
 	// ComboBox button separation
-	COMBO_BUTTON_SPACING = 17
+	ComboBoxProperty_COMBO_BUTTON_SPACING = 17
 )
-
-// GuiComboBoxProperty .
-type GuiComboBoxProperty = int32
 
 const (
 	// DropdownBox arrow separation from border and items
-	ARROW_PADDING int32 = 16
+	DropdownBoxProperty_ARROW_PADDING ControlProperty = 16
 	// DropdownBox items separation
-	DROPDOWN_ITEMS_SPACING = 17
+	DropdownBoxProperty_DROPDOWN_ITEMS_SPACING = 17
 )
-
-// GuiDropdownBoxProperty .
-type GuiDropdownBoxProperty = int32
 
 const (
 	// TextBox/TextBoxMulti/ValueBox/Spinner inner text padding
-	TEXT_INNER_PADDING int32 = 16
+	TextBoxProperty_TEXT_INNER_PADDING ControlProperty = 16
 	// TextBoxMulti lines separation
-	TEXT_LINES_SPACING = 17
+	TextBoxProperty_TEXT_LINES_SPACING = 17
 )
-
-// GuiTextBoxProperty .
-type GuiTextBoxProperty = int32
 
 const (
 	// Spinner left/right buttons width
-	SPIN_BUTTON_WIDTH int32 = 16
+	SpinnerProperty_SPIN_BUTTON_WIDTH ControlProperty = 16
 	// Spinner buttons separation
-	SPIN_BUTTON_SPACING = 17
+	SpinnerProperty_SPIN_BUTTON_SPACING = 17
 )
-
-// GuiSpinnerProperty .
-type GuiSpinnerProperty = int32
 
 const (
 	// ListView items height
-	LIST_ITEMS_HEIGHT int32 = 16
+	ListViewProperty_LIST_ITEMS_HEIGHT ControlProperty = 16
 	// ListView items separation
-	LIST_ITEMS_SPACING = 17
+	ListViewProperty_LIST_ITEMS_SPACING = 17
 	// ListView scrollbar size (usually width)
-	SCROLLBAR_WIDTH = 18
+	ListViewProperty_SCROLLBAR_WIDTH = 18
 	// ListView scrollbar side (0-left, 1-right)
-	SCROLLBAR_SIDE = 19
+	ListViewProperty_SCROLLBAR_SIDE = 19
 )
-
-// GuiListViewProperty .
-type GuiListViewProperty = int32
 
 const (
-	COLOR_SELECTOR_SIZE int32 = 16
+	ColorPickerProperty_COLOR_SELECTOR_SIZE ControlProperty = 16
 	// colorex.RGBA right hue bar width
-	HUEBAR_WIDTH = 17
+	ColorPickerProperty_HUEBAR_WIDTH = 17
 	// colorex.RGBA right hue bar separation from panel
-	HUEBAR_PADDING = 18
+	ColorPickerProperty_HUEBAR_PADDING = 18
 	// colorex.RGBA right hue bar selector height
-	HUEBAR_SELECTOR_HEIGHT = 19
+	ColorPickerProperty_HUEBAR_SELECTOR_HEIGHT = 19
 	// colorex.RGBA right hue bar selector overflow
-	HUEBAR_SELECTOR_OVERFLOW = 20
+	ColorPickerProperty_HUEBAR_SELECTOR_OVERFLOW = 20
 )
 
-// GuiColorPickerProperty .
-type GuiColorPickerProperty = int32
-
-func GetTextSize(text string) vector2.Float32 {
-	ctext := textAlloc(text)
-	ret := C.GetTextSize(ctext)
-	return *govec2ptr(&ret)
-}
+//func GetTextSize(text string) vector2.Float32 {
+//	ctext := textAlloc(text)
+//	ret := C.GetTextSize(ctext)
+//	return *govec2ptr(&ret)
+//}
 
 // GuiEnable - Enable gui controls (global state)
 func Enable() {
@@ -290,29 +262,42 @@ func Fade(color colorex.RGBA, alpha float32) {
 }
 
 // GuiSetState - Set gui state (global state)
-func SetState(state GuiState) {
+func SetState(state State) {
 	cstate := C.int(state)
 	C.GuiSetState(cstate)
 }
 
 // GuiGetState - Get gui state (global state)
-func GetState() GuiState {
-	return GuiState(C.GuiGetState())
+func GetState() State {
+	return State(C.GuiGetState())
 }
 
 // GuiSetStyle .
-func SetStyle(control int32, property int32, value int32) {
+func SetStyle[T constraints.Integer](control Control, property ControlProperty, value T) {
 	ccontrol := C.int(control)
 	cproperty := C.int(property)
 	cvalue := C.int(value)
 	C.GuiSetStyle(ccontrol, cproperty, cvalue)
 }
 
-// GuiGetStyle - Get one style property
-func GetStyle(control int32, property int32) int32 {
+func SetStyleColor(control Control, property ControlProperty, color colorex.RGBA) {
 	ccontrol := C.int(control)
 	cproperty := C.int(property)
-	return int32(C.GuiGetStyle(ccontrol, cproperty))
+	cvalue := C.int(rl.ColorToInt(color))
+	C.GuiSetStyle(ccontrol, cproperty, cvalue)
+}
+
+// GuiGetStyle - Get one style property
+func GetStyle[T constraints.Integer](control Control, property ControlProperty) T {
+	ccontrol := C.int(control)
+	cproperty := C.int(property)
+	return T(C.GuiGetStyle(ccontrol, cproperty))
+}
+
+func GetStyleColor(control Control, property ControlProperty) colorex.RGBA {
+	ccontrol := C.int(control)
+	cproperty := C.int(property)
+	return rl.GetColor(uint(C.GuiGetStyle(ccontrol, cproperty)))
 }
 
 // GuiWindowBox - Window Box control, shows a window that can be closed
@@ -1210,9 +1195,4 @@ func GetFont() rl.Font {
 // SetAlpha - set alpha (global state)
 func SetAlpha(alpha float32) {
 	C.GuiSetAlpha((C.float)(alpha))
-}
-
-// SetScale - set scale (global state)
-func SetScale(alpha float32) {
-	C.GuiSetScale((C.float)(alpha))
 }

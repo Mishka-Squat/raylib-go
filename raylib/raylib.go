@@ -10,40 +10,22 @@ package rl
 
 import (
 	"io"
+	"io/fs"
 	"runtime"
 	"unsafe"
 
-	rm "github.com/igadmg/gamemath"
-	"github.com/igadmg/gamemath/rect2"
-	"github.com/igadmg/gamemath/vector2"
-	"github.com/igadmg/gamemath/vector3"
-	"github.com/igadmg/gamemath/vector4"
-	"github.com/igadmg/goex/image/colorex"
+	"github.com/Mishka-Squat/gamemath/rect2"
+	"github.com/Mishka-Squat/gamemath/vector2"
+	"github.com/Mishka-Squat/gamemath/vector3"
+	"github.com/Mishka-Squat/gamemath/vector4"
+	"github.com/Mishka-Squat/goex/image/colorex"
+	"github.com/Mishka-Squat/goex/mathex"
+	"golang.org/x/exp/constraints"
 )
 
 func init() {
 	// Make sure the main goroutine is bound to the main thread.
 	runtime.LockOSThread()
-}
-
-type IntegerT interface {
-	int | int8 | int16 | int32 | int64
-}
-
-type FloatT interface {
-	float32 | float64
-}
-
-type NumberT interface {
-	IntegerT | FloatT
-}
-
-type CoordinateT interface {
-	NumberT
-}
-
-type Vector2T interface {
-	vector2.Float32 | vector2.Int
 }
 
 // Wave type, defines audio wave data
@@ -76,6 +58,10 @@ func (w Wave) IsValid() bool {
 		w.Channels > 0 // Validate number of channels supported
 }
 
+func (w *Wave) Unload() {
+	UnloadWave(w)
+}
+
 // AudioCallback function.
 type AudioCallback func(data []float32, frames int)
 
@@ -90,6 +76,10 @@ type Sound struct {
 func (s Sound) IsValid() bool {
 	return s.FrameCount > 0 && // Validate frame count
 		s.Stream.IsValid() // Validate stream buffer
+}
+
+func (s *Sound) Unload() {
+	UnloadSound(s)
 }
 
 // Music type (file streaming from memory)
@@ -107,6 +97,10 @@ func (m Music) IsValid() bool {
 	return m.CtxData != nil && // Validate context loaded
 		m.FrameCount > 0 && // Validate audio frame count
 		m.Stream.IsValid() // Validate audio stream
+}
+
+func (m *Music) Unload() {
+	UnloadMusicStream(m)
 }
 
 // AudioStream type
@@ -131,6 +125,10 @@ func (s AudioStream) IsValid() bool {
 		s.SampleRate > 0 && // Validate sample rate is supported
 		s.SampleSize > 0 && // Validate sample size is supported
 		s.Channels > 0 // Validate number of channels supported
+}
+
+func (a *AudioStream) Unload() {
+	UnloadAudioStream(a)
 }
 
 type maDataConverter struct {
@@ -291,6 +289,15 @@ const (
 	FlagBorderlessWindowedMode ConfigFlags = 0x00008000 // Set to run program in borderless windowed mode
 	FlagMsaa4xHint             ConfigFlags = 0x00000020 // Set to try enabling MSAA 4X
 	FlagInterlacedHint         ConfigFlags = 0x00010000 // Set to try enabling interlaced video format (for V3D)
+)
+
+type InputEventType int
+
+const (
+	InputEventPressed = iota // Default input event
+	InputEventDown
+	InputEventReleased
+	InputEventUp
 )
 
 type KeyType int32
@@ -488,6 +495,305 @@ const (
 	GamepadAxisRightTrigger                        // Gamepad back trigger right, pressure level: [1..-1]
 )
 
+type InputDeviceType int8
+
+const (
+	Keyboard InputDeviceType = iota
+	Mouse
+	Gamepad
+	Gesture
+)
+
+type InputDeviceMask int32
+
+const InputDeviceMaskShift = 28
+const InputGamepadIndexMaskWidth = 4 // Up to 16 gamepads
+const InputKeyMask = (1 << InputDeviceMaskShift) - 1
+
+const (
+	KeyboardMask InputDeviceMask = InputDeviceMask(Keyboard) << InputDeviceMaskShift
+	MouseMask                    = InputDeviceMask(Mouse) << InputDeviceMaskShift
+	GamepadMask                  = InputDeviceMask(Gamepad) << InputDeviceMaskShift
+	GestureMask                  = InputDeviceMask(Gesture) << InputDeviceMaskShift
+)
+
+type UnifiedKeyType int32
+
+func (k UnifiedKeyType) Device() InputDeviceType {
+	return InputDeviceType(k >> InputDeviceMaskShift)
+}
+
+func (k UnifiedKeyType) Keyboard() KeyType {
+	return KeyType(k & InputKeyMask)
+}
+
+func (k UnifiedKeyType) Mouse() MouseButtonType {
+	return MouseButtonType(k & InputKeyMask)
+}
+
+func (k UnifiedKeyType) Gamepad() GamepadButtonType {
+	return GamepadButtonType(k & InputKeyMask)
+}
+
+func (k UnifiedKeyType) GamepadIndex() int {
+	return int(k&InputKeyMask) >> (InputDeviceMaskShift - InputGamepadIndexMaskWidth)
+}
+
+func (k UnifiedKeyType) Gesture() Gestures {
+	switch k {
+	case Gesture_Tap:
+		return GestureTap
+	case Gesture_DoubleTap:
+		return GestureDoubleTap
+	case Gesture_SwipeRight:
+		return GestureSwipeRight
+	case Gesture_SwipeLeft:
+		return GestureSwipeLeft
+	case Gesture_SwipeUp:
+		return GestureSwipeUp
+	case Gesture_SwipeDown:
+		return GestureSwipeDown
+	}
+
+	return GestureNone
+}
+
+func (k UnifiedKeyType) IsPressed() bool {
+	switch k.Device() {
+	case Keyboard:
+		return IsKeyPressed(k.Keyboard())
+	case Mouse:
+		return IsMouseButtonPressed(k.Mouse())
+	case Gamepad:
+		return IsGamepadButtonPressed(k.GamepadIndex(), k.Gamepad())
+	case Gesture:
+		return IsGestureDetected(k.Gesture())
+	}
+	return false
+}
+
+func (k UnifiedKeyType) IsDown() bool {
+	switch k.Device() {
+	case Keyboard:
+		return IsKeyDown(k.Keyboard())
+	case Mouse:
+		return IsMouseButtonDown(k.Mouse())
+	case Gamepad:
+		return IsGamepadButtonDown(k.GamepadIndex(), k.Gamepad())
+	case Gesture:
+		return IsGestureDetected(k.Gesture())
+	}
+	return false
+}
+
+func (k UnifiedKeyType) IsReleased() bool {
+	switch k.Device() {
+	case Keyboard:
+		return IsKeyReleased(k.Keyboard())
+	case Mouse:
+		return IsMouseButtonReleased(k.Mouse())
+	case Gamepad:
+		return IsGamepadButtonReleased(k.GamepadIndex(), k.Gamepad())
+	case Gesture:
+		return IsGestureDetected(k.Gesture())
+	}
+	return false
+}
+
+func (k UnifiedKeyType) IsUp() bool {
+	switch k.Device() {
+	case Keyboard:
+		return IsKeyUp(k.Keyboard())
+	case Mouse:
+		return IsMouseButtonUp(k.Mouse())
+	case Gamepad:
+		return IsGamepadButtonUp(k.GamepadIndex(), k.Gamepad())
+	case Gesture:
+		return IsGestureDetected(k.Gesture())
+	}
+	return false
+}
+
+func (k UnifiedKeyType) IsEvent(event InputEventType) bool {
+	if k == Any_KeyNone {
+		return true
+	}
+
+	switch event {
+	case InputEventPressed:
+		return k.IsPressed()
+	case InputEventDown:
+		return k.IsDown()
+	case InputEventReleased:
+		return k.IsReleased()
+	case InputEventUp:
+		return k.IsUp()
+	}
+	return false
+}
+
+const (
+	// Any_KeyNone is used for no key - any check will return true
+	Any_KeyNone = 0
+
+	// Keyboard Function Keys
+	Keyboard_KeySpace        = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeySpace)
+	Keyboard_KeyEscape       = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyEscape)
+	Keyboard_KeyEnter        = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyEnter)
+	Keyboard_KeyTab          = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyTab)
+	Keyboard_KeyBackspace    = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyBackspace)
+	Keyboard_KeyInsert       = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyInsert)
+	Keyboard_KeyDelete       = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyDelete)
+	Keyboard_KeyRight        = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyRight)
+	Keyboard_KeyLeft         = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyLeft)
+	Keyboard_KeyDown         = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyDown)
+	Keyboard_KeyUp           = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyUp)
+	Keyboard_KeyPageUp       = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyPageUp)
+	Keyboard_KeyPageDown     = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyPageDown)
+	Keyboard_KeyHome         = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyHome)
+	Keyboard_KeyEnd          = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyEnd)
+	Keyboard_KeyCapsLock     = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyCapsLock)
+	Keyboard_KeyScrollLock   = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyScrollLock)
+	Keyboard_KeyNumLock      = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyNumLock)
+	Keyboard_KeyPrintScreen  = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyPrintScreen)
+	Keyboard_KeyPause        = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyPause)
+	Keyboard_KeyF1           = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyF1)
+	Keyboard_KeyF2           = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyF2)
+	Keyboard_KeyF3           = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyF3)
+	Keyboard_KeyF4           = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyF4)
+	Keyboard_KeyF5           = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyF5)
+	Keyboard_KeyF6           = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyF6)
+	Keyboard_KeyF7           = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyF7)
+	Keyboard_KeyF8           = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyF8)
+	Keyboard_KeyF9           = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyF9)
+	Keyboard_KeyF10          = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyF10)
+	Keyboard_KeyF11          = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyF11)
+	Keyboard_KeyF12          = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyF12)
+	Keyboard_KeyLeftShift    = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyLeftShift)
+	Keyboard_KeyLeftControl  = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyLeftControl)
+	Keyboard_KeyLeftAlt      = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyLeftAlt)
+	Keyboard_KeyLeftSuper    = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyLeftSuper)
+	Keyboard_KeyRightShift   = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyRightShift)
+	Keyboard_KeyRightControl = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyRightControl)
+	Keyboard_KeyRightAlt     = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyRightAlt)
+	Keyboard_KeyRightSuper   = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyRightSuper)
+	Keyboard_KeyKbMenu       = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyKbMenu)
+	Keyboard_KeyLeftBracket  = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyLeftBracket)
+	Keyboard_KeyBackSlash    = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyBackSlash)
+	Keyboard_KeyRightBracket = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyRightBracket)
+	Keyboard_KeyGrave        = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyGrave)
+
+	// Keyboard Number Pad Keys
+	Keyboard_KeyKp0        = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyKp0)
+	Keyboard_KeyKp1        = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyKp1)
+	Keyboard_KeyKp2        = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyKp2)
+	Keyboard_KeyKp3        = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyKp3)
+	Keyboard_KeyKp4        = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyKp4)
+	Keyboard_KeyKp5        = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyKp5)
+	Keyboard_KeyKp6        = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyKp6)
+	Keyboard_KeyKp7        = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyKp7)
+	Keyboard_KeyKp8        = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyKp8)
+	Keyboard_KeyKp9        = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyKp9)
+	Keyboard_KeyKpDecimal  = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyKpDecimal)
+	Keyboard_KeyKpDivide   = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyKpDivide)
+	Keyboard_KeyKpMultiply = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyKpMultiply)
+	Keyboard_KeyKpSubtract = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyKpSubtract)
+	Keyboard_KeyKpAdd      = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyKpAdd)
+	Keyboard_KeyKpEnter    = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyKpEnter)
+	Keyboard_KeyKpEqual    = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyKpEqual)
+
+	// Keyboard Alpha Numeric Keys
+	Keyboard_KeyApostrophe = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyApostrophe)
+	Keyboard_KeyComma      = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyComma)
+	Keyboard_KeyMinus      = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyMinus)
+	Keyboard_KeyPlus       = Keyboard_KeyEqual
+	Keyboard_KeyPeriod     = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyPeriod)
+	Keyboard_KeySlash      = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeySlash)
+	Keyboard_KeyZero       = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyZero)
+	Keyboard_KeyOne        = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyOne)
+	Keyboard_KeyTwo        = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyTwo)
+	Keyboard_KeyThree      = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyThree)
+	Keyboard_KeyFour       = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyFour)
+	Keyboard_KeyFive       = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyFive)
+	Keyboard_KeySix        = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeySix)
+	Keyboard_KeySeven      = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeySeven)
+	Keyboard_KeyEight      = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyEight)
+	Keyboard_KeyNine       = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyNine)
+	Keyboard_KeySemicolon  = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeySemicolon)
+	Keyboard_KeyEqual      = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyEqual)
+	Keyboard_KeyA          = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyA)
+	Keyboard_KeyB          = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyB)
+	Keyboard_KeyC          = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyC)
+	Keyboard_KeyD          = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyD)
+	Keyboard_KeyE          = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyE)
+	Keyboard_KeyF          = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyF)
+	Keyboard_KeyG          = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyG)
+	Keyboard_KeyH          = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyH)
+	Keyboard_KeyI          = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyI)
+	Keyboard_KeyJ          = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyJ)
+	Keyboard_KeyK          = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyK)
+	Keyboard_KeyL          = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyL)
+	Keyboard_KeyM          = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyM)
+	Keyboard_KeyN          = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyN)
+	Keyboard_KeyO          = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyO)
+	Keyboard_KeyP          = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyP)
+	Keyboard_KeyQ          = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyQ)
+	Keyboard_KeyR          = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyR)
+	Keyboard_KeyS          = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyS)
+	Keyboard_KeyT          = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyT)
+	Keyboard_KeyU          = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyU)
+	Keyboard_KeyV          = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyV)
+	Keyboard_KeyW          = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyW)
+	Keyboard_KeyX          = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyX)
+	Keyboard_KeyY          = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyY)
+	Keyboard_KeyZ          = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyZ)
+
+	// Android keys
+	Keyboard_KeyBack       = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyBack)
+	Keyboard_KeyMenu       = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyMenu)
+	Keyboard_KeyVolumeUp   = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyVolumeUp)
+	Keyboard_KeyVolumeDown = UnifiedKeyType(KeyboardMask) | UnifiedKeyType(KeyVolumeDown)
+
+	// Mouse buttons
+	Mouse_ButtonLeft    = UnifiedKeyType(MouseMask) | UnifiedKeyType(MouseButtonLeft)
+	Mouse_ButtonRight   = UnifiedKeyType(MouseMask) | UnifiedKeyType(MouseButtonRight)
+	Mouse_ButtonMiddle  = UnifiedKeyType(MouseMask) | UnifiedKeyType(MouseButtonMiddle)
+	Mouse_ButtonSide    = UnifiedKeyType(MouseMask) | UnifiedKeyType(MouseButtonSide)
+	Mouse_ButtonExtra   = UnifiedKeyType(MouseMask) | UnifiedKeyType(MouseButtonExtra)
+	Mouse_ButtonForward = UnifiedKeyType(MouseMask) | UnifiedKeyType(MouseButtonForward)
+	Mouse_ButtonBack    = UnifiedKeyType(MouseMask) | UnifiedKeyType(MouseButtonBack)
+	Mouse_ButtonNone    = UnifiedKeyType(MouseMask) | UnifiedKeyType(MouseButtonNone) // keep last
+
+	// Gamepad buttons
+	Gamepad_ButtonUnknown        = UnifiedKeyType(GamepadMask) | UnifiedKeyType(GamepadButtonUnknown)
+	Gamepad_ButtonLeftFaceUp     = UnifiedKeyType(GamepadMask) | UnifiedKeyType(GamepadButtonLeftFaceUp)
+	Gamepad_ButtonLeftFaceRight  = UnifiedKeyType(GamepadMask) | UnifiedKeyType(GamepadButtonLeftFaceRight)
+	Gamepad_ButtonLeftFaceDown   = UnifiedKeyType(GamepadMask) | UnifiedKeyType(GamepadButtonLeftFaceDown)
+	Gamepad_ButtonLeftFaceLeft   = UnifiedKeyType(GamepadMask) | UnifiedKeyType(GamepadButtonLeftFaceLeft)
+	Gamepad_ButtonRightFaceUp    = UnifiedKeyType(GamepadMask) | UnifiedKeyType(GamepadButtonRightFaceUp)
+	Gamepad_ButtonRightFaceRight = UnifiedKeyType(GamepadMask) | UnifiedKeyType(GamepadButtonRightFaceRight)
+	Gamepad_ButtonRightFaceDown  = UnifiedKeyType(GamepadMask) | UnifiedKeyType(GamepadButtonRightFaceDown)
+	Gamepad_ButtonRightFaceLeft  = UnifiedKeyType(GamepadMask) | UnifiedKeyType(GamepadButtonRightFaceLeft)
+	Gamepad_ButtonLeftTrigger1   = UnifiedKeyType(GamepadMask) | UnifiedKeyType(GamepadButtonLeftTrigger1)
+	Gamepad_ButtonLeftTrigger2   = UnifiedKeyType(GamepadMask) | UnifiedKeyType(GamepadButtonLeftTrigger2)
+	Gamepad_ButtonRightTrigger1  = UnifiedKeyType(GamepadMask) | UnifiedKeyType(GamepadButtonRightTrigger1)
+	Gamepad_ButtonRightTrigger2  = UnifiedKeyType(GamepadMask) | UnifiedKeyType(GamepadButtonRightTrigger2)
+	Gamepad_ButtonMiddleLeft     = UnifiedKeyType(GamepadMask) | UnifiedKeyType(GamepadButtonMiddleLeft)
+	Gamepad_ButtonMiddle         = UnifiedKeyType(GamepadMask) | UnifiedKeyType(GamepadButtonMiddle)
+	Gamepad_ButtonMiddleRight    = UnifiedKeyType(GamepadMask) | UnifiedKeyType(GamepadButtonMiddleRight)
+	Gamepad_ButtonLeftThumb      = UnifiedKeyType(GamepadMask) | UnifiedKeyType(GamepadButtonLeftThumb)
+	Gamepad_ButtonRightThumb     = UnifiedKeyType(GamepadMask) | UnifiedKeyType(GamepadButtonRightThumb)
+)
+const (
+	// Gestures which can be processed as virtual key inputs. These will only respond any event like on Pressed event
+	Gesture_Tap = iota + UnifiedKeyType(GestureMask)
+	Gesture_DoubleTap
+	Gesture_SwipeRight
+	Gesture_SwipeLeft
+	Gesture_SwipeUp
+	Gesture_SwipeDown
+)
+
 // Some Basic Colors
 // NOTE: Custom raylib color palette for amazing visuals on WHITE background
 var (
@@ -497,6 +803,10 @@ var (
 	Gray = NewColor(130, 130, 130, 255)
 	// Dark Gray
 	DarkGray = NewColor(80, 80, 80, 255)
+	// Darkest Gray
+	DarkestGray = NewColor(40, 40, 40, 255)
+	// Black Gray - the darkset of all Grays
+	BlackGray = NewColor(20, 20, 20, 255)
 	// Yellow
 	Yellow = NewColor(253, 249, 0, 255)
 	// Gold
@@ -600,11 +910,11 @@ func NewColor(r, g, b, a uint8) colorex.RGBA {
 type RectangleInt32 = rect2.Int32
 
 // NewRectangle - Returns new Rectangle
-func NewRectangle[XT, YT, WT, HT CoordinateT](x XT, y YT, width WT, height HT) rect2.Float32 {
+func NewRectangle[XT, YT, WT, HT mathex.Number](x XT, y YT, width WT, height HT) rect2.Float32 {
 	return rect2.New(vector2.NewFloat32(x, y), vector2.NewFloat32(width, height))
 }
 
-func NewRectangleWHV[WHT rm.SignedNumber](wh vector2.Vector[WHT]) rect2.Float32 {
+func NewRectangleWHV[WHT mathex.SignedNumber](wh vector2.Vector[WHT]) rect2.Float32 {
 	return rect2.New(vector2.Zero[float32](), wh.ToFloat32())
 }
 
@@ -660,16 +970,39 @@ func NewBoundingBox(min, max vector3.Float32) BoundingBox {
 	return BoundingBox{min, max}
 }
 
-// Asset file
-type Asset interface {
-	io.ReadSeeker
-	io.Closer
-
-	Size() int64
+// Asset implements fs.FS interfaces
+type Asset struct {
+	root string
+	fsys fs.FS
 }
 
-func ReadAll(a Asset) ([]byte, error) {
-	b := make([]byte, a.Size())
+// NewAsset - creates a new Asset filesystem
+// For Android: root should be empty or a directory path within assets
+// For Desktop: root should be the filesystem path to assets
+func NewAsset(root string) *Asset {
+	return &Asset{root: root}
+}
+
+// NewAssetFromFS - creates a new Asset filesystem from a fs.FS
+// The root parameter specifies a subdirectory within the embedded filesystem (can be empty for root)
+func NewAssetFromFS(fsys fs.FS, root string) *Asset {
+	return &Asset{root: root, fsys: fsys}
+}
+
+// AssetFile represents an opened asset file
+type AssetFile interface {
+	io.ReadSeeker
+	io.Closer
+	Stat() (fs.FileInfo, error)
+}
+
+func ReadAll(a AssetFile) ([]byte, error) {
+	s, err := a.Stat()
+	if err != nil {
+		return nil, err
+	}
+
+	b := make([]byte, s.Size())
 	if _, err := a.Read(b); err != nil {
 		return nil, err
 	}
@@ -862,6 +1195,10 @@ func (m Mesh) IsValid() bool {
 	return true
 }
 
+func (m *Mesh) Unload() {
+	UnloadMesh(m)
+}
+
 // Material type
 type Material struct {
 	// Shader
@@ -873,11 +1210,11 @@ type Material struct {
 }
 
 // IsMaterialValid - Check if a material is valid (shader assigned, map textures loaded in GPU)
-func (material Material) IsValid() bool {
+func (m Material) IsValid() bool {
 	result := false
 
-	if material.Maps != nil && // Validate material contain some map
-		material.Shader.IsValid() { // Validate material shader is valid
+	if m.Maps != nil && // Validate material contain some map
+		m.Shader.IsValid() { // Validate material shader is valid
 		result = true
 	}
 
@@ -886,9 +1223,13 @@ func (material Material) IsValid() bool {
 	return result
 }
 
+func (m *Material) Unload() {
+	UnloadMaterial(m)
+}
+
 // GetMap - Get pointer to MaterialMap by map type
-func (mt Material) GetMap(index int32) *MaterialMap {
-	return (*MaterialMap)(unsafe.Pointer(uintptr(unsafe.Pointer(mt.Maps)) + uintptr(index)*unsafe.Sizeof(MaterialMap{})))
+func (m Material) GetMap(index int32) *MaterialMap {
+	return (*MaterialMap)(unsafe.Pointer(uintptr(unsafe.Pointer(m.Maps)) + uintptr(index)*unsafe.Sizeof(MaterialMap{})))
 }
 
 // MaterialMap type
@@ -953,6 +1294,10 @@ func (model Model) IsValid() bool {
 	return result
 }
 
+func (m *Model) Unload() {
+	UnloadModel(m)
+}
+
 // GetMeshes returns the meshes of a model as go slice
 func (m Model) GetMeshes() []Mesh {
 	return unsafe.Slice(m.Meshes, m.MeshCount)
@@ -1006,6 +1351,10 @@ type ModelAnimation struct {
 	Bones      *BoneInfo
 	FramePoses **Transform
 	Name       [32]uint8
+}
+
+func (m *ModelAnimation) Unload() {
+	UnloadModelAnimation(m)
 }
 
 // GetBones returns the bones information (skeleton) of a ModelAnimation as go slice
@@ -1076,6 +1425,10 @@ func (s Shader) IsValid() bool {
 		s.Locs != nil
 }
 
+func (m *Shader) Unload() {
+	UnloadShader(m)
+}
+
 // GetLocation - Get shader value's location
 func (s Shader) GetLocation(index int32) int32 {
 	return *(*int32)(unsafe.Pointer(uintptr(unsafe.Pointer(s.Locs)) + uintptr(index*4)))
@@ -1136,6 +1489,10 @@ func (f Font) IsValid() bool {
 		f.Glyphs != nil // Validate glyph data is loaded
 }
 
+func (m *Font) Unload() {
+	UnloadFont(m)
+}
+
 // DrawTextEx - Draw text using Font and additional parameters
 func (f Font) DrawEx(text string, position vector2.Float32, fontSize float32, spacing float32, tint colorex.RGBA) {
 	DrawTextEx(f, text, position, fontSize, spacing, tint)
@@ -1158,21 +1515,22 @@ func (f Font) GetRecs() []rect2.Float32 {
 type FontPreset struct {
 	Font
 
-	FontSize float32
-	Spacing  float32
+	FontSize    uint16
+	Spacing     uint16
+	LineSpacing uint16
 }
 
 func (f FontPreset) DrawEx(text string, position vector2.Float32, tint colorex.RGBA) {
-	DrawTextEx(f.Font, text, position, f.FontSize, f.Spacing, tint)
+	DrawTextEx(f.Font, text, position, float32(f.FontSize), float32(f.Spacing), tint)
 }
 
 func (f FontPreset) DrawLayout(text string, tint colorex.RGBA, layoutFn func(wh vector2.Float32) rect2.Float32) {
-	DrawTextLayout(f.Font, text, f.FontSize, f.Spacing, tint, layoutFn)
+	DrawTextLayout(f.Font, text, float32(f.FontSize), float32(f.Spacing), tint, layoutFn)
 }
 
 // MeasureTextEx - Measure string size for Font
 func (f FontPreset) MeasureEx(text string) vector2.Float32 {
-	return MeasureTextEx(f.Font, text, f.FontSize, f.Spacing)
+	return MeasureTextEx(f.Font, text, float32(f.FontSize), float32(f.Spacing))
 }
 
 // PixelFormat - Texture format
@@ -1181,48 +1539,32 @@ type PixelFormat int32
 // Texture formats
 // NOTE: Support depends on OpenGL version and platform
 const (
-	// 8 bit per pixel (no alpha)
-	UncompressedGrayscale PixelFormat = iota + 1
-	// 8*2 bpp (2 channels)
-	UncompressedGrayAlpha
-	// 16 bpp
-	UncompressedR5g6b5
-	// 24 bpp
-	UncompressedR8g8b8
-	// 16 bpp (1 bit alpha)
-	UncompressedR5g5b5a1
-	// 16 bpp (4 bit alpha)
-	UncompressedR4g4b4a4
-	// 32 bpp
-	UncompressedR8g8b8a8
-	// 32 bpp (1 channel - float)
-	UncompressedR32
-	// 32*3 bpp (3 channels - float)
-	UncompressedR32g32b32
-	// 32*4 bpp (4 channels - float)
-	UncompressedR32g32b32a32
-	// 4 bpp (no alpha)
-	CompressedDxt1Rgb
-	// 4 bpp (1 bit alpha)
-	CompressedDxt1Rgba
-	// 8 bpp
-	CompressedDxt3Rgba
-	// 8 bpp
-	CompressedDxt5Rgba
-	// 4 bpp
-	CompressedEtc1Rgb
-	// 4 bpp
-	CompressedEtc2Rgb
-	// 8 bpp
-	CompressedEtc2EacRgba
-	// 4 bpp
-	CompressedPvrtRgb
-	// 4 bpp
-	CompressedPvrtRgba
-	// 8 bpp
-	CompressedAstc4x4Rgba
-	// 2 bpp
-	CompressedAstc8x8Rgba
+	UncompressedGrayscale    PixelFormat = iota + 1 // 8 bit per pixel (no alpha)
+	UncompressedGrayAlpha                           // 8*2 bpp (2 channels)
+	UncompressedR5G6B5                              // 16 bpp
+	UncompressedR8G8B8                              // 24 bpp
+	UncompressedR5G5B5A1                            // 16 bpp (1 bit alpha)
+	UncompressedR4G4B4A4                            // 16 bpp (4 bit alpha)
+	UncompressedR8G8B8A8                            // 32 bpp
+	UncompressedR32                                 // 32 bpp (1 channel - float)
+	UncompressedR32G32B32                           // 32*3 bpp (3 channels - float)
+	UncompressedR32G32B32A32                        // 32*4 bpp (4 channels - float)
+	UncompressedR16                                 // 16 bpp (1 channel - half float)
+	UncompressedR16G16B16                           // 16*3 bpp (3 channels - half float)
+	UncompressedR16G16B16A16                        // 16*4 bpp (4 channels - half float)
+	UncompressedR16UI                               // 16 bit per pixel (no alpha)
+	UncompressedR32UI                               // 32 bit per pixel (no alpha)
+	CompressedDxt1Rgb                               // 4 bpp (no alpha)
+	CompressedDxt1Rgba                              // 4 bpp (1 bit alpha)
+	CompressedDxt3Rgba                              // 8 bpp
+	CompressedDxt5Rgba                              // 8 bpp
+	CompressedEtc1Rgb                               // 4 bpp
+	CompressedEtc2Rgb                               // 4 bpp
+	CompressedEtc2EacRgba                           // 8 bpp
+	CompressedPvrtRgb                               // 4 bpp
+	CompressedPvrtRgba                              // 4 bpp
+	CompressedAstc4x4Rgba                           // 8 bpp
+	CompressedAstc8x8Rgba                           // 2 bpp
 )
 
 // TextureFilterMode - Texture filter mode
@@ -1336,13 +1678,23 @@ type Texture2D struct {
 	Format PixelFormat
 }
 
-// NewTexture2D - Returns new Texture2D
-func NewTexture2D(id uint32, width, height, mipmaps int32, format PixelFormat) *Texture2D {
-	return &Texture2D{id, width, height, mipmaps, format}
+// NewTexture2D - creates new empty texture of given size and format
+func NewTexture2D[T constraints.Integer](width, height, mipmaps T, format PixelFormat) Texture2D {
+	return LoadTextureFromImage(
+		Image{
+			Width:   int32(width),
+			Height:  int32(height),
+			Mipmaps: int32(mipmaps),
+			Format:  format,
+		})
 }
 
 func (t *Texture2D) Unload() {
 	UnloadTexture(t)
+}
+
+func (t Texture2D) IsValidFast() bool {
+	return t.ID > 0
 }
 
 func (t Texture2D) IsValid() bool {
@@ -1430,6 +1782,10 @@ func NewRenderTexture2D(id uint32, texture, depth Texture2D) *RenderTexture2D {
 	return &RenderTexture2D{id, texture, depth}
 }
 
+func (r RenderTexture2D) IsValidFast() bool {
+	return r.ID > 0
+}
+
 func (r RenderTexture2D) IsValid() bool {
 	return r.ID > 0 &&
 		r.Texture.IsValid() &&
@@ -1484,6 +1840,37 @@ type NPatchInfo struct {
 	Right  int32         // Right border offset
 	Bottom int32         // Bottom border offset
 	Layout NPatchLayout  // Layout of the n-patch: 3x3, 1x3 or 3x1
+}
+
+func (i NPatchInfo) Default(d any) NPatchInfo {
+	switch d := d.(type) {
+	case Texture2D:
+		i.Source = d.GetRect()
+		iss := i.Source.Size
+		if iss.X == iss.Y {
+			ps := int32(iss.X / 3)
+			i.Layout = NPatchNinePatch
+			i.Left = ps
+			i.Top = ps
+			i.Right = ps
+			i.Bottom = ps
+		} else if iss.X > iss.Y {
+			ps := int32(iss.X / 3)
+			i.Layout = NPatchThreePatchHorizontal
+			i.Left = ps
+			i.Top = ps
+			i.Right = ps
+			i.Bottom = ps
+		} else {
+			ps := int32(iss.Y / 3)
+			i.Layout = NPatchThreePatchVertical
+			i.Left = ps
+			i.Top = ps
+			i.Right = ps
+			i.Bottom = ps
+		}
+	}
+	return i
 }
 
 // VrStereoConfig, VR stereo rendering configuration for simulator

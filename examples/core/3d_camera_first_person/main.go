@@ -3,8 +3,10 @@ package main
 import (
 	"fmt"
 
-	"github.com/igadmg/gamemath/vector3"
-	rl "github.com/igadmg/raylib-go/raylib"
+	"github.com/Mishka-Squat/gamemath/vector2"
+	"github.com/Mishka-Squat/gamemath/vector3"
+	"github.com/Mishka-Squat/goex/image/colorex"
+	rl "github.com/Mishka-Squat/raylib-go/raylib"
 )
 
 const (
@@ -42,8 +44,8 @@ func main() {
 
 	// Generates some random columns
 	heights := make([]float32, maxColumns)
-	positions := make([]rl.Vector3, maxColumns)
-	colors := make([]rl.Color, maxColumns)
+	positions := make([]vector3.Float32, maxColumns)
+	colors := make([]colorex.RGBA, maxColumns)
 
 	for i := 0; i < maxColumns; i++ {
 		heights[i] = rndF(1, 12)
@@ -128,10 +130,10 @@ func main() {
 
 		rl.BeginMode3D(camera)
 
-		rl.DrawPlane(rl.NewVector3(0.0, 0.0, 0.0), rl.NewVector2(32.0, 32.0), rl.LightGray) // Draw ground
-		rl.DrawCube(rl.NewVector3(-16.0, 2.5, 0.0), 1.0, 5.0, 32.0, rl.Blue)                // Draw a blue wall
-		rl.DrawCube(rl.NewVector3(16.0, 2.5, 0.0), 1.0, 5.0, 32.0, rl.Lime)                 // Draw a green wall
-		rl.DrawCube(rl.NewVector3(0.0, 2.5, 16.0), 32.0, 5.0, 1.0, rl.Gold)                 // Draw a yellow wall
+		rl.DrawPlane(vector3.NewFloat32(0.0, 0.0, 0.0), vector2.NewFloat32(32.0, 32.0), rl.LightGray) // Draw ground
+		rl.DrawCube(vector3.NewFloat32(-16.0, 2.5, 0.0), 1.0, 5.0, 32.0, rl.Blue)                     // Draw a blue wall
+		rl.DrawCube(vector3.NewFloat32(16.0, 2.5, 0.0), 1.0, 5.0, 32.0, rl.Lime)                      // Draw a green wall
+		rl.DrawCube(vector3.NewFloat32(0.0, 2.5, 16.0), 32.0, 5.0, 1.0, rl.Gold)                      // Draw a yellow wall
 
 		// Draw some cubes around
 		for i := 0; i < maxColumns; i++ {

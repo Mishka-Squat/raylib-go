@@ -21,7 +21,7 @@
 *
 *   LICENSE: zlib/libpng
 *
-*   Copyright (c) 2014-2025 Ramon Santamaria (@raysan5)
+*   Copyright (c) 2014-2026 Ramon Santamaria (@raysan5)
 *
 *   This software is provided "as-is", without any express or implied warranty. In no event
 *   will the authors be held liable for any damages arising from the use of this software.
@@ -240,13 +240,13 @@ typedef struct {
 // Global Variables Definition
 //----------------------------------------------------------------------------------
 static GesturesData GESTURES = {
-    .Touch.firstId = -1,
     .current = GESTURE_NONE,        // No current gesture detected
+    .Touch.firstId = -1,
     .enabledFlags = 0b0000001111111111  // All gestures supported by default
 };
 
 //----------------------------------------------------------------------------------
-// Module specific Functions Declaration
+// Module Internal Functions Declaration
 //----------------------------------------------------------------------------------
 static Vector2 rgVector2Subtract(Vector2 v1, Vector2 v2);
 static float rgVector2Direction(Vector2 v);
@@ -543,7 +543,7 @@ float GetGesturePinchAngle(void)
 }
 
 //----------------------------------------------------------------------------------
-// Module specific Functions Definition
+// Module Internal Functions Definition
 //----------------------------------------------------------------------------------
 static Vector2 rgVector2Subtract(Vector2 v1, Vector2 v2)
 {

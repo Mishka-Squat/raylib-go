@@ -10,11 +10,12 @@ import (
 	"fmt"
 	"iter"
 	"runtime"
+	"slices"
 	"unsafe"
 
-	"github.com/igadmg/gamemath/rect2"
-	"github.com/igadmg/gamemath/vector2"
-	"github.com/igadmg/goex/image/colorex"
+	"github.com/Mishka-Squat/gamemath/rect2"
+	"github.com/Mishka-Squat/gamemath/vector2"
+	"github.com/Mishka-Squat/goex/image/colorex"
 )
 
 type PackContext struct {
@@ -203,6 +204,10 @@ func LoadTextureAtlas(width, height int, fileNames ...string) (TextureAtlas, err
 	}, nil
 }
 
+func LoadTextureAtlasSeq(width, height int, fileNames iter.Seq[string]) (TextureAtlas, error) {
+	return LoadTextureAtlas(width, height, slices.Collect(fileNames)...)
+}
+
 func LoadTextureAtlasEx(width, height int, imgFn func(path string) Image, fileNames ...string) (TextureAtlas, error) {
 	ia, err := LoadImageAtlasEx(width, height, imgFn, fileNames...)
 	if err != nil {
@@ -215,6 +220,10 @@ func LoadTextureAtlasEx(width, height int, imgFn func(path string) Image, fileNa
 		Texture: LoadTextureFromImage(iaImage),
 		Atlas:   ia.Atlas,
 	}, nil
+}
+
+func LoadTextureAtlasExSeq(width, height int, imgFn func(path string) Image, fileNames iter.Seq[string]) (TextureAtlas, error) {
+	return LoadTextureAtlasEx(width, height, imgFn, slices.Collect(fileNames)...)
 }
 
 func (t *TextureAtlas) Unload() {

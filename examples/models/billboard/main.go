@@ -12,9 +12,9 @@
 ********************************************************************************************/package main
 
 import (
-	"github.com/igadmg/gamemath/vector2"
-	"github.com/igadmg/gamemath/vector3"
-	rl "github.com/igadmg/raylib-go/raylib"
+	"github.com/Mishka-Squat/gamemath/vector2"
+	"github.com/Mishka-Squat/gamemath/vector3"
+	rl "github.com/Mishka-Squat/raylib-go/raylib"
 )
 
 const (
@@ -26,9 +26,9 @@ func main() {
 	rl.InitWindow(screenWidth, screenHeight, "raylib [models] example - drawing billboards")
 
 	camera := rl.Camera{}
-	camera.Position = rl.NewVector3(5.0, 4.0, 5.0)
-	camera.Target = rl.NewVector3(0.0, 2.0, 0.0)
-	camera.Up = rl.NewVector3(0.0, 1.0, 0.0)
+	camera.Position = vector3.NewFloat32(5.0, 4.0, 5.0)
+	camera.Target = vector3.NewFloat32(0.0, 2.0, 0.0)
+	camera.Up = vector3.NewFloat32(0.0, 1.0, 0.0)
 	camera.Fovy = 45.0
 	camera.Projection = rl.CameraPerspective
 

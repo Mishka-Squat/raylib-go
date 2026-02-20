@@ -5,8 +5,8 @@ import (
 	"slices"
 	"unsafe"
 
-	"github.com/igadmg/gamemath/vector3"
-	rl "github.com/igadmg/raylib-go/raylib"
+	"github.com/Mishka-Squat/gamemath/vector3"
+	rl "github.com/Mishka-Squat/raylib-go/raylib"
 )
 
 var supportedFileTypes = []string{
@@ -36,7 +36,7 @@ func main() {
 
 	rl.SetMaterialTexture(obj.Materials, rl.MapDiffuse, texture) // Set map diffuse texture
 
-	position := rl.NewVector3(0.0, 0.0, 0.0) // Set model position
+	position := vector3.NewFloat32(0.0, 0.0, 0.0) // Set model position
 
 	meshes := unsafe.Slice(obj.Meshes, obj.MeshCount)
 	bounds := rl.GetMeshBoundingBox(meshes[0]) // Set model bounds

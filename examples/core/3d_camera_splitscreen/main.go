@@ -1,7 +1,9 @@
 package main
 
 import (
-	rl "github.com/igadmg/raylib-go/raylib"
+	"github.com/Mishka-Squat/gamemath/vector2"
+	"github.com/Mishka-Squat/gamemath/vector3"
+	rl "github.com/Mishka-Squat/raylib-go/raylib"
 )
 
 var (
@@ -62,11 +64,11 @@ func main() {
 			cam2.Target.X -= frameOffset
 		}
 
-		rl.BeginTextureMode(&screenCam1)
+		rl.BeginTextureMode(screenCam1)
 		rl.ClearBackground(rl.SkyBlue)
 		rl.BeginMode3D(cam1)
 
-		rl.DrawPlane(rl.Vector3Zero(), rl.NewVector2(50, 50), rl.Beige)
+		rl.DrawPlane(vector3.Zero[float32](), vector2.NewFloat32(50, 50), rl.Beige)
 
 		for x := -count * spacing; x <= count*spacing; x += spacing {
 			for z := -count * spacing; z <= count*spacing; z += spacing {
@@ -89,7 +91,7 @@ func main() {
 		rl.ClearBackground(rl.SkyBlue)
 		rl.BeginMode3D(cam2)
 
-		rl.DrawPlane(rl.Vector3Zero(), rl.NewVector2(50, 50), rl.Beige)
+		rl.DrawPlane(vector3.Zero[float32](), vector2.NewFloat32(50, 50), rl.Beige)
 
 		for x := -count * spacing; x <= count*spacing; x += spacing {
 			for z := -count * spacing; z <= count*spacing; z += spacing {
@@ -111,8 +113,8 @@ func main() {
 		rl.BeginDrawing()
 		rl.ClearBackground(rl.Black)
 
-		rl.DrawTextureRec(&screenCam1.Texture, splitScreenRec, rl.NewVector2(0, 0), rl.White)
-		rl.DrawTextureRec(&screenCam2.Texture, splitScreenRec, rl.NewVector2(float32(screenW/2), 0), rl.White)
+		rl.DrawTextureRec(screenCam1.Texture, splitScreenRec, vector2.NewFloat32(0, 0), rl.White)
+		rl.DrawTextureRec(screenCam2.Texture, splitScreenRec, vector2.NewFloat32(float32(screenW/2), 0), rl.White)
 		rl.DrawRectangle((screenW/2)-2, 0, 4, screenH, rl.LightGray)
 
 		rl.EndDrawing()

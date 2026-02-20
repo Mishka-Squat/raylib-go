@@ -10,11 +10,15 @@ package rl
 import "C"
 
 import (
+	"io/fs"
 	"os"
+	"path/filepath"
+
+	"golang.org/x/exp/constraints"
 )
 
 // InitWindow - Initialize Window and OpenGL Graphics
-func InitWindow[WT, HT IntegerT](width WT, height HT, title string) {
+func InitWindow[WT, HT constraints.Integer](width WT, height HT, title string) {
 	cwidth := (C.int)(width)
 	cheight := (C.int)(height)
 
@@ -77,11 +81,63 @@ func UnloadDroppedFiles() {
 	return
 }
 
-// OpenAsset - Open asset
-func OpenAsset(name string) (Asset, error) {
-	f, err := os.Open(name)
+// Open implements fs.FS interface - opens the named file for reading
+func (a *Asset) Open(name string) (fs.File, error) {
+	return openAssetFile(a.root, name)
+}
+
+// ReadFile implements fs.ReadFileFS interface - reads the entire file
+func (a *Asset) ReadFile(name string) ([]byte, error) {
+	return readAssetFile(a.root, name)
+}
+
+// ReadDir implements fs.ReadDirFS interface - reads the directory
+func (a *Asset) ReadDir(name string) ([]fs.DirEntry, error) {
+	return readAssetDir(a.root, name)
+}
+
+// desktopAsset wraps os.File to implement AssetFile interface
+type desktopAsset struct {
+	*os.File
+}
+
+func (d *desktopAsset) Stat() (fs.FileInfo, error) {
+	return d.File.Stat()
+}
+
+func (d *desktopAsset) Seek(offset int64, whence int) (int64, error) {
+	return d.File.Seek(offset, whence)
+}
+
+func openAssetFile(root, name string) (fs.File, error) {
+	fullPath := name
+	if root != "" {
+		fullPath = filepath.Join(root, name)
+	}
+
+	f, err := os.Open(fullPath)
 	if err != nil {
 		return nil, err
 	}
 	return f, nil
+
+	return &desktopAsset{f}, nil
+}
+
+func readAssetFile(root, name string) ([]byte, error) {
+	fullPath := name
+	if root != "" {
+		fullPath = filepath.Join(root, name)
+	}
+
+	return os.ReadFile(fullPath)
+}
+
+func readAssetDir(root, name string) ([]fs.DirEntry, error) {
+	fullPath := name
+	if root != "" {
+		fullPath = filepath.Join(root, name)
+	}
+
+	return os.ReadDir(fullPath)
 }

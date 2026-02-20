@@ -1,10 +1,10 @@
-module github.com/igadmg/raylib-go/easings
+module github.com/Mishka-Squat/raylib-go/easings
 
-go 1.24
+go 1.25.0
 
-require github.com/igadmg/gamemath v0.0.0-20250502152201-14a551f600ad
+require github.com/Mishka-Squat/goex v0.0.0-20260220093026-a6a159ee586e
 
 require (
 	github.com/chewxy/math32 v1.11.1 // indirect
-	golang.org/x/exp v0.0.0-20250408133849-7e4ce0ab07d0 // indirect
+	golang.org/x/exp v0.0.0-20260218203240-3dfff04db8fa // indirect
 )
